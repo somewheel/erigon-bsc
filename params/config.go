@@ -34,6 +34,7 @@ const (
 	ErigonMineName     = "erigonmine"
 	CalaverasChainName = "calaveras"
 	SokolChainName     = "sokol"
+	TestChainName      = "test"
 )
 
 // Genesis hashes to enforce below configs on.
@@ -301,7 +302,7 @@ var (
 	CliqueSnapshot = NewSnapshotConfig(10, 1024, 16384, true, "")
 
 	TestChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1),
+		ChainID:             big.NewInt(123),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      false,
@@ -316,8 +317,8 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         nil,
-		Ethash:              new(EthashConfig),
-		Clique:              nil,
+		Ethash:              nil,
+		Clique:              &CliqueConfig{Period: 5, Epoch: 30000},
 	}
 
 	TestRules = TestChainConfig.Rules(0)

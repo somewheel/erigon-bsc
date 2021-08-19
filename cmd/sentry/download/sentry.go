@@ -118,6 +118,8 @@ func makeP2PServer(
 		urls = params.CalaverasBootnodes
 	case params.SokolGenesisHash:
 		urls = params.SokolBootnodes
+	default:
+		urls = params.TestBootnodes
 	}
 	p2pConfig.BootstrapNodes = make([]*enode.Node, 0, len(urls))
 	for _, url := range urls {

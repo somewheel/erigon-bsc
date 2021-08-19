@@ -310,7 +310,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.SokolGenesisHash:
 		return params.SokolChainConfig
 	default:
-		return params.AllEthashProtocolChanges
+		return params.TestChainConfig
 	}
 }
 
@@ -638,6 +638,26 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 			common.BytesToAddress([]byte{8}): {Balance: big.NewInt(1)}, // ECPairing
 			common.BytesToAddress([]byte{9}): {Balance: big.NewInt(1)}, // BLAKE2b
 			faucet:                           {Balance: new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 256), big.NewInt(9))},
+		},
+	}
+}
+func TestGenesisBlock() *Genesis {
+	// Override the default period to the user requested one
+	config := *params.TestChainConfig
+	// config.Clique.Period = period
+
+	// Assemble and return the genesis with the precompiles and faucet pre-funded
+	return &Genesis{
+		Config:    &config,
+		Timestamp: hexutil.MustDecodeUint64("0x61162352"),
+		// ExtraData:  append(append(make([]byte, 32), faucet[:]...), make([]byte, crypto.SignatureLength)...),
+		ExtraData:  hexutil.MustDecode("0x0000000000000000000000000000000000000000000000000000000000000000316557f1de6155b70f49ec1feb7347278f6f87988519198ecf41f3080fdbabbdc852e34fc6b81677f4267ab396e8fde7393cef34229af4738987c7b40000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   0x47b760,
+		Difficulty: big.NewInt(1),
+		Alloc: map[common.Address]GenesisAccount{
+			common.HexToAddress("0x316557f1de6155b70f49ec1feb7347278f6f8798"): {Balance: hexutil.MustDecodeBig("0x200000000000000000000000000000000000000000000000000000000000000")},
+			common.HexToAddress("0x8519198ecf41f3080fdbabbdc852e34fc6b81677"): {Balance: hexutil.MustDecodeBig("0x200000000000000000000000000000000000000000000000000000000000000")},
+			common.HexToAddress("0xf4267ab396e8fde7393cef34229af4738987c7b4"): {Balance: hexutil.MustDecodeBig("0x200000000000000000000000000000000000000000000000000000000000000")},
 		},
 	}
 }

@@ -8,7 +8,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/VictoriaMetrics/metrics"
 	"github.com/c2h5oh/datasize"
 	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
@@ -22,8 +21,6 @@ import (
 	"github.com/ledgerwatch/log/v3"
 )
 
-var stageHeadersGauge = metrics.GetOrCreateCounter("stage_headers")
-
 type HeadersCfg struct {
 	db                kv.RwDB
 	hd                *headerdownload.HeaderDownload
@@ -32,6 +29,7 @@ type HeadersCfg struct {
 	announceNewHashes func(context.Context, []headerdownload.Announce)
 	penalize          func(context.Context, []headerdownload.PenaltyItem)
 	batchSize         datasize.ByteSize
+	noP2PDiscovery    bool
 }
 
 func StageHeadersCfg(
@@ -42,6 +40,7 @@ func StageHeadersCfg(
 	announceNewHashes func(context.Context, []headerdownload.Announce),
 	penalize func(context.Context, []headerdownload.PenaltyItem),
 	batchSize datasize.ByteSize,
+	noP2PDiscovery bool,
 ) HeadersCfg {
 	return HeadersCfg{
 		db:                db,
@@ -51,6 +50,7 @@ func StageHeadersCfg(
 		announceNewHashes: announceNewHashes,
 		penalize:          penalize,
 		batchSize:         batchSize,
+		noP2PDiscovery:    noP2PDiscovery,
 	}
 }
 
@@ -98,6 +98,11 @@ func HeadersForward(
 				return err
 			}
 		}
+		return nil
+	}
+
+	// Allow other stages to run 1 cycle if no network available
+	if initialCycle && cfg.noP2PDiscovery {
 		return nil
 	}
 
@@ -200,7 +205,6 @@ func HeadersForward(
 	}
 	// We do not print the followin line if the stage was interrupted
 	log.Info(fmt.Sprintf("[%s] Processed", logPrefix), "highest inserted", headerInserter.GetHighest(), "age", common.PrettyAge(time.Unix(int64(headerInserter.GetHighestTimestamp()), 0)))
-	stageHeadersGauge.Set(cfg.hd.Progress())
 	return nil
 }
 
@@ -224,7 +228,7 @@ func fixCanonicalChain(logPrefix string, logEvery *time.Ticker, height uint64, h
 
 		select {
 		case <-logEvery.C:
-			log.Info("fix canonical", "ancestor", ancestorHeight, "hash", ancestorHash)
+			log.Info("write canonical markers", "ancestor", ancestorHeight, "hash", ancestorHash)
 		default:
 		}
 		ancestorHash = ancestor.ParentHash

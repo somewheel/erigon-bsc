@@ -3,6 +3,7 @@ package download
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -19,7 +20,9 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_recovery "github.com/grpc-ecosystem/go-grpc-middleware/recovery"
-	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"google.golang.org/protobuf/types/known/emptypb"
+
+	//grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"github.com/holiman/uint256"
 	"github.com/ledgerwatch/erigon-lib/gointerfaces"
 	proto_sentry "github.com/ledgerwatch/erigon-lib/gointerfaces/sentry"
@@ -28,7 +31,6 @@ import (
 	"github.com/ledgerwatch/erigon/common/debug"
 	"github.com/ledgerwatch/erigon/core/forkid"
 	"github.com/ledgerwatch/erigon/eth/protocols/eth"
-	"github.com/ledgerwatch/erigon/metrics"
 	"github.com/ledgerwatch/erigon/p2p"
 	"github.com/ledgerwatch/erigon/p2p/dnsdisc"
 	"github.com/ledgerwatch/erigon/p2p/enode"
@@ -193,6 +195,9 @@ func handShake(
 		}
 		if uint(reply.ProtocolVersion) < minVersion {
 			return fmt.Errorf("version is less than allowed minimum: theirs %d, min %d", reply.ProtocolVersion, minVersion)
+		}
+		if uint(reply.ProtocolVersion) > version {
+			return fmt.Errorf("version is more than what this senty supports: theirs %d, max %d", reply.ProtocolVersion, version)
 		}
 		if reply.Genesis != genesisHash {
 			return fmt.Errorf("genesis hash does not match: theirs %x, ours %x", reply.Genesis, genesisHash)
@@ -415,7 +420,7 @@ func rootContext() context.Context {
 	return ctx
 }
 
-func grpcSentryServer(ctx context.Context, sentryAddr string, ss *SentryServerImpl) error {
+func grpcSentryServer(ctx context.Context, sentryAddr string, ss *SentryServerImpl) (*grpc.Server, error) {
 	// STARTING GRPC SERVER
 	log.Info("Starting Sentry P2P server", "on", sentryAddr)
 	listenConfig := net.ListenConfig{
@@ -426,7 +431,7 @@ func grpcSentryServer(ctx context.Context, sentryAddr string, ss *SentryServerIm
 	}
 	lis, err := listenConfig.Listen(ctx, "tcp", sentryAddr)
 	if err != nil {
-		return fmt.Errorf("could not create Sentry P2P listener: %w, addr=%s", err, sentryAddr)
+		return nil, fmt.Errorf("could not create Sentry P2P listener: %w, addr=%s", err, sentryAddr)
 	}
 	var (
 		streamInterceptors []grpc.StreamServerInterceptor
@@ -434,10 +439,10 @@ func grpcSentryServer(ctx context.Context, sentryAddr string, ss *SentryServerIm
 	)
 	streamInterceptors = append(streamInterceptors, grpc_recovery.StreamServerInterceptor())
 	unaryInterceptors = append(unaryInterceptors, grpc_recovery.UnaryServerInterceptor())
-	if metrics.Enabled {
-		streamInterceptors = append(streamInterceptors, grpc_prometheus.StreamServerInterceptor)
-		unaryInterceptors = append(unaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
-	}
+	//if metrics.Enabled {
+	//	streamInterceptors = append(streamInterceptors, grpc_prometheus.StreamServerInterceptor)
+	//	unaryInterceptors = append(unaryInterceptors, grpc_prometheus.UnaryServerInterceptor)
+	//}
 
 	var grpcServer *grpc.Server
 	//cpus := uint32(runtime.GOMAXPROCS(-1))
@@ -458,15 +463,15 @@ func grpcSentryServer(ctx context.Context, sentryAddr string, ss *SentryServerIm
 	grpcServer = grpc.NewServer(opts...)
 
 	proto_sentry.RegisterSentryServer(grpcServer, ss)
-	if metrics.Enabled {
-		grpc_prometheus.Register(grpcServer)
-	}
+	//if metrics.Enabled {
+	//	grpc_prometheus.Register(grpcServer)
+	//}
 	go func() {
 		if err1 := grpcServer.Serve(lis); err1 != nil {
 			log.Error("Sentry P2P server fail", "err", err1)
 		}
 	}()
-	return nil
+	return grpcServer, nil
 }
 
 func NewSentryServer(ctx context.Context, dialCandidates enode.Iterator, readNodeInfo func() *eth.NodeInfo, cfg *p2p.Config, protocol uint) *SentryServerImpl {
@@ -546,13 +551,15 @@ func Sentry(datadir string, sentryAddr string, discoveryDNS []string, cfg *p2p.C
 	ctx := rootContext()
 	sentryServer := NewSentryServer(ctx, nil, func() *eth.NodeInfo { return nil }, cfg, protocolVersion)
 
-	err := grpcSentryServer(ctx, sentryAddr, sentryServer)
+	grpcServer, err := grpcSentryServer(ctx, sentryAddr, sentryServer)
 	if err != nil {
 		return err
 	}
 	sentryServer.discoveryDNS = discoveryDNS
 
 	<-ctx.Done()
+	grpcServer.GracefulStop()
+	sentryServer.Close()
 	return nil
 }
 
@@ -813,18 +820,22 @@ func (ss *SentryServerImpl) SendMessageToAll(ctx context.Context, req *proto_sen
 	return reply, nil
 }
 
-func (ss *SentryServerImpl) SetStatus(_ context.Context, statusData *proto_sentry.StatusData) (*proto_sentry.SetStatusReply, error) {
-	genesisHash := gointerfaces.ConvertH256ToHash(statusData.ForkData.Genesis)
-
-	ss.lock.Lock()
-	defer ss.lock.Unlock()
-	reply := &proto_sentry.SetStatusReply{}
+func (ss *SentryServerImpl) HandShake(context.Context, *emptypb.Empty) (*proto_sentry.HandShakeReply, error) {
+	reply := &proto_sentry.HandShakeReply{}
 	switch ss.Protocol.Version {
 	case eth.ETH66:
 		reply.Protocol = proto_sentry.Protocol_ETH66
 	case eth.ETH65:
 		reply.Protocol = proto_sentry.Protocol_ETH65
 	}
+	return reply, nil
+}
+func (ss *SentryServerImpl) SetStatus(_ context.Context, statusData *proto_sentry.StatusData) (*proto_sentry.SetStatusReply, error) {
+	genesisHash := gointerfaces.ConvertH256ToHash(statusData.ForkData.Genesis)
+
+	ss.lock.Lock()
+	defer ss.lock.Unlock()
+	reply := &proto_sentry.SetStatusReply{}
 
 	if ss.P2pServer == nil {
 		var err error
@@ -900,6 +911,9 @@ func (ss *SentryServerImpl) send(msgID proto_sentry.MessageId, peerID string, b 
 		Data:   b,
 	})
 	for _, err := range errs {
+		if errors.Is(err, io.EOF) || errors.Is(err, context.Canceled) {
+			continue
+		}
 		log.Error("Sending msg to core P2P failed", "msg", proto_sentry.MessageId_name[int32(msgID)], "error", err)
 	}
 }
@@ -944,6 +958,13 @@ func (ss *SentryServerImpl) Messages(req *proto_sentry.MessagesRequest, server p
 		return nil
 	case <-server.Context().Done():
 		return nil
+	}
+}
+
+// Close performs cleanup operations for the sentry
+func (ss *SentryServerImpl) Close() {
+	if ss.P2pServer != nil {
+		ss.P2pServer.Stop()
 	}
 }
 
@@ -1018,7 +1039,7 @@ func (s *MessageStreams) remove(id uint) {
 
 func (ss *SentryServerImpl) sendNewPeerToClients(peerID *proto_types.H512) {
 	if err := ss.peersStreams.Broadcast(&proto_sentry.PeersReply{PeerId: peerID, Event: proto_sentry.PeersReply_Connect}); err != nil {
-		log.Error("Sending new peer notice to core P2P failed", "error", err)
+		log.Warn("Sending new peer notice to core P2P failed", "error", err)
 	}
 }
 

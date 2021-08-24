@@ -24,13 +24,13 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/params"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/ledgerwatch/erigon/common"
+	"github.com/ledgerwatch/erigon/consensus"
+	"github.com/ledgerwatch/erigon/core/types"
+	"github.com/ledgerwatch/erigon/ethdb"
+	"github.com/ledgerwatch/erigon/internal/ethapi"
+	"github.com/ledgerwatch/erigon/params"
 )
 
 // Snapshot is the state of the validatorSet at a given point.

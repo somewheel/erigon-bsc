@@ -70,3 +70,7 @@ docker-compose.dev.yml
 
 libmdbx/build/*
 tests/testdata/*
+*.dat
+*.lck
+dev/nodekey
+dev/LOCK

@@ -642,6 +642,17 @@ func DeveloperGenesisBlock(period uint64, faucet common.Address) *Genesis {
 	}
 }
 
+func DefaultParliaGenesisBlock() *Genesis {
+	return &Genesis{
+		Config:     params.ParliaChainConfig,
+		Timestamp:  0x5e9da7ce,
+		ExtraData:  hexutil.MustDecode("0x00000000000000000000000000000000000000000000000000000000000000000b25f687df22eb7dc55e6d547749b229811c3dae4193803810050169f19f2eb45793399ae443275c7e83150c703f75547d0bf5c08e8209da0ae4a40c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"),
+		GasLimit:   0x2625a00,
+		Difficulty: big.NewInt(1),
+		Alloc:      readPrealloc("allocs/parlia.json"),
+	}
+}
+
 func readPrealloc(filename string) GenesisAlloc {
 	f, err := allocs.Open(filename)
 	if err != nil {

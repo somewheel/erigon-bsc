@@ -588,6 +588,8 @@ func setBootstrapNodes(ctx *cli.Context, cfg *p2p.Config) {
 			urls = params.CalaverasBootnodes
 		case params.SokolChainName:
 			urls = params.SokolBootnodes
+		case params.ParliaChainName:
+			urls = params.ParliaBootnodes
 		default:
 			if cfg.BootstrapNodes != nil {
 				return // already set, don't apply defaults.
@@ -1250,6 +1252,11 @@ func SetEthConfig(ctx *cli.Context, nodeConfig *node.Config, cfg *ethconfig.Conf
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
 			cfg.Miner.GasPrice = big.NewInt(1)
 		}
+	case params.ParliaChainName:
+		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
+			cfg.NetworkID = 97
+		}
+		cfg.Genesis = core.DefaultParliaGenesisBlock()
 	default:
 		Fatalf("ChainDB name is not recognized: %s", chain)
 	}
@@ -1311,6 +1318,8 @@ func MakeGenesis(ctx *cli.Context) *core.Genesis {
 		genesis = core.DefaultSokolGenesisBlock()
 	case params.DevChainName:
 		Fatalf("Developer chains are ephemeral")
+	case params.ParliaChainName:
+		genesis = core.DefaultParliaGenesisBlock()
 	}
 	return genesis
 }

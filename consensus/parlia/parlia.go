@@ -18,28 +18,40 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/sha3"
 
-	"github.com/ethereum/go-ethereum"
-	"github.com/ethereum/go-ethereum/accounts"
-	"github.com/ethereum/go-ethereum/accounts/abi"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/gopool"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
-	"github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/forkid"
-	"github.com/ethereum/go-ethereum/core/state"
-	"github.com/ethereum/go-ethereum/core/systemcontracts"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethdb"
-	"github.com/ethereum/go-ethereum/internal/ethapi"
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
+	// "github.com/ethereum/go-ethereum"
+	// "github.com/ethereum/go-ethereum/accounts"
+	// "github.com/ethereum/go-ethereum/accounts/abi"
+	// "github.com/ethereum/go-ethereum/common"
+	// "github.com/ethereum/go-ethereum/common/gopool"
+	// "github.com/ethereum/go-ethereum/common/hexutil"
+	// "github.com/ethereum/go-ethereum/consensus"
+	// "github.com/ethereum/go-ethereum/consensus/misc"
+	// "github.com/ethereum/go-ethereum/core"
+	// "github.com/ethereum/go-ethereum/core/forkid"
+	// "github.com/ethereum/go-ethereum/core/state"
+	// "github.com/ethereum/go-ethereum/core/systemcontracts"
+	"github.com/ledgerwatch/erigon/core/types"
+	"github.com/ledgerwatch/erigon/internal/ethapi"
+	// "github.com/ethereum/go-ethereum/core/vm"
+	// "github.com/ethereum/go-ethereum/crypto"
+	// "github.com/ethereum/go-ethereum/ethdb"
+	// "github.com/ethereum/go-ethereum/internal/ethapi"
+	// "github.com/ethereum/go-ethereum/log"
+	// "github.com/ethereum/go-ethereum/params"
+	// "github.com/ethereum/go-ethereum/rlp"
+	// "github.com/ethereum/go-ethereum/rpc"
+	// "github.com/ethereum/go-ethereum/trie"
+	"github.com/ledgerwatch/erigon-lib/kv"
+	"github.com/ledgerwatch/erigon/accounts/abi"
+	"github.com/ledgerwatch/erigon/common"
+	"github.com/ledgerwatch/erigon/common/hexutil"
+	"github.com/ledgerwatch/erigon/consensus/misc"
+	"github.com/ledgerwatch/erigon/core/vm"
+	"github.com/ledgerwatch/erigon/crypto"
+	"github.com/ledgerwatch/erigon/params"
+	"github.com/ledgerwatch/erigon/rlp"
+	"github.com/ledgerwatch/erigon/rpc"
+	"github.com/ledgerwatch/log/v3"
 )
 
 const (
@@ -194,7 +206,7 @@ type Parlia struct {
 	chainConfig *params.ChainConfig  // Chain config
 	config      *params.ParliaConfig // Consensus engine configuration parameters for parlia consensus
 	genesisHash common.Hash
-	db          ethdb.Database // Database to store and retrieve snapshot checkpoints
+	db          kv.RwDB // Database to store and retrieve snapshot checkpoints
 
 	recentSnaps *lru.ARCCache // Snapshots for recent block to speed up
 	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
@@ -207,7 +219,7 @@ type Parlia struct {
 
 	lock sync.RWMutex // Protects the signer fields
 
-	ethAPI          *ethapi.PublicBlockChainAPI
+	// ethAPI          *ethapi.PublicBlockChainAPI
 	validatorSetABI abi.ABI
 	slashABI        abi.ABI
 
@@ -218,9 +230,8 @@ type Parlia struct {
 // New creates a Parlia consensus engine.
 func New(
 	chainConfig *params.ChainConfig,
-	db ethdb.Database,
-	ethAPI *ethapi.PublicBlockChainAPI,
-	genesisHash common.Hash,
+	snapshotConfig *params.SnapshotConfig,
+	cliqueDB kv.RwDB,
 ) *Parlia {
 	// get parlia config
 	parliaConfig := chainConfig.Parlia
@@ -231,11 +242,11 @@ func New(
 	}
 
 	// Allocate the snapshot caches and create the engine
-	recentSnaps, err := lru.NewARC(inMemorySnapshots)
+	recentSnaps, err := lru.NewARC(snapshotConfig.InmemorySnapshots)
 	if err != nil {
 		panic(err)
 	}
-	signatures, err := lru.NewARC(inMemorySignatures)
+	signatures, err := lru.NewARC(snapshotConfig.InmemorySignatures)
 	if err != nil {
 		panic(err)
 	}
@@ -250,9 +261,9 @@ func New(
 	c := &Parlia{
 		chainConfig:     chainConfig,
 		config:          parliaConfig,
-		genesisHash:     genesisHash,
+		genesisHash:     nil,
 		db:              db,
-		ethAPI:          ethAPI,
+		ethAPI:          nil,
 		recentSnaps:     recentSnaps,
 		signatures:      signatures,
 		validatorSetABI: vABI,

@@ -36,6 +36,7 @@ import (
 	"github.com/ledgerwatch/erigon/consensus/clique"
 	"github.com/ledgerwatch/erigon/consensus/db"
 	"github.com/ledgerwatch/erigon/consensus/ethash"
+	"github.com/ledgerwatch/erigon/consensus/parlia"
 	"github.com/ledgerwatch/erigon/core"
 	"github.com/ledgerwatch/erigon/eth/gasprice"
 	"github.com/ledgerwatch/erigon/params"
@@ -210,6 +211,8 @@ func CreateConsensusEngine(chainConfig *params.ChainConfig, logger log.Logger, c
 	case *params.SnapshotConfig:
 		if chainConfig.Clique != nil {
 			eng = clique.New(chainConfig, consensusCfg, db.OpenDatabase(consensusCfg.DBPath, logger, consensusCfg.InMemory))
+		} else if chainConfig.Parlia != nil {
+			eng = parlia.New(chainConfig, consensusCfg, db.OpenDatabase(consensusCfg.DBPath, logger, consensusCfg.InMemory))
 		}
 	case *params.AuRaConfig:
 		if chainConfig.Aura != nil {

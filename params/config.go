@@ -321,7 +321,7 @@ var (
 		Clique:              nil,
 	}
 	ParliaChainConfig = &ChainConfig{
-		ChainID:             big.NewInt(1),
+		ChainID:             big.NewInt(97),
 		HomesteadBlock:      big.NewInt(0),
 		DAOForkBlock:        nil,
 		DAOForkSupport:      false,
@@ -336,8 +336,9 @@ var (
 		MuirGlacierBlock:    big.NewInt(0),
 		BerlinBlock:         big.NewInt(0),
 		LondonBlock:         nil,
-		Ethash:              new(EthashConfig),
+		Ethash:              nil,
 		Clique:              nil,
+		Parlia:              new(ParliaConfig),
 	}
 
 	TestRules = TestChainConfig.Rules(0)
@@ -375,6 +376,7 @@ type ChainConfig struct {
 	// Various consensus engines
 	Ethash *EthashConfig `json:"ethash,omitempty"`
 	Clique *CliqueConfig `json:"clique,omitempty"`
+	Parlia *ParliaConfig `json:"parlia,omitempty"`
 	Aura   *AuRaConfig   `json:"aura,omitempty"`
 }
 
@@ -388,6 +390,11 @@ func (c *EthashConfig) String() string {
 
 // CliqueConfig is the consensus engine configs for proof-of-authority based sealing.
 type CliqueConfig struct {
+	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
+	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
+}
+
+type ParliaConfig struct {
 	Period uint64 `json:"period"` // Number of seconds between blocks to enforce
 	Epoch  uint64 `json:"epoch"`  // Epoch length to reset votes and checkpoint
 }

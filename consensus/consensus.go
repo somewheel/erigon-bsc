@@ -28,6 +28,10 @@ import (
 	"github.com/ledgerwatch/erigon/rpc"
 )
 
+var (
+	SystemAddress = common.HexToAddress("0xffffFFFfFFffffffffffffffFfFFFfffFFFfFFfE")
+)
+
 // ChainHeaderReader defines a small collection of methods needed to access the local
 // blockchain during header verification.
 type ChainHeaderReader interface {

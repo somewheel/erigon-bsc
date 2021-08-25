@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"math"
+
+	// "math/big"
 	"math/big"
 	"math/rand"
 	"sort"
@@ -16,22 +18,25 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/holiman/uint256"
 	"golang.org/x/crypto/sha3"
 
-	// "github.com/ethereum/go-ethereum"
-	// "github.com/ethereum/go-ethereum/accounts"
-	// "github.com/ethereum/go-ethereum/accounts/abi"
-	// "github.com/ethereum/go-ethereum/common"
-	// "github.com/ethereum/go-ethereum/common/gopool"
-	// "github.com/ethereum/go-ethereum/common/hexutil"
-	// "github.com/ethereum/go-ethereum/consensus"
-	// "github.com/ethereum/go-ethereum/consensus/misc"
-	// "github.com/ethereum/go-ethereum/core"
-	// "github.com/ethereum/go-ethereum/core/forkid"
-	// "github.com/ethereum/go-ethereum/core/state"
-	// "github.com/ethereum/go-ethereum/core/systemcontracts"
+	ethereum "github.com/ledgerwatch/erigon"
+	// "github.com/ledgerwatch/erigon/accounts"
+	// "github.com/ledgerwatch/erigon/accounts/abi"
+	// "github.com/ledgerwatch/erigon/common"
+	"github.com/ledgerwatch/erigon/common/gopool"
+	// "github.com/ledgerwatch/erigon/common/hexutil"
+	// "github.com/ledgerwatch/erigon/consensus"
+	// "github.com/ledgerwatch/erigon/consensus/misc"
+	"github.com/ledgerwatch/erigon/core"
+	"github.com/ledgerwatch/erigon/core/forkid"
+	"github.com/ledgerwatch/erigon/core/state"
+
+	"github.com/ledgerwatch/erigon/core/systemcontracts"
 	"github.com/ledgerwatch/erigon/core/types"
 	"github.com/ledgerwatch/erigon/internal/ethapi"
+
 	// "github.com/ethereum/go-ethereum/core/vm"
 	// "github.com/ethereum/go-ethereum/crypto"
 	// "github.com/ethereum/go-ethereum/ethdb"
@@ -45,6 +50,7 @@ import (
 	"github.com/ledgerwatch/erigon/accounts/abi"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/common/hexutil"
+	"github.com/ledgerwatch/erigon/consensus"
 	"github.com/ledgerwatch/erigon/consensus/misc"
 	"github.com/ledgerwatch/erigon/core/vm"
 	"github.com/ledgerwatch/erigon/crypto"
@@ -156,8 +162,8 @@ var (
 
 // SignerFn is a signer callback function to request a header to be signed by a
 // backing account.
-type SignerFn func(accounts.Account, string, []byte) ([]byte, error)
-type SignerTxFn func(accounts.Account, *types.Transaction, *big.Int) (*types.Transaction, error)
+type SignerFn func(common.Address, string, []byte) ([]byte, error)
+type SignerTxFn func(common.Address, *types.Transaction, *big.Int) (*types.Transaction, error)
 
 func isToSystemContract(to common.Address) bool {
 	return systemContracts[to]
@@ -219,7 +225,7 @@ type Parlia struct {
 
 	lock sync.RWMutex // Protects the signer fields
 
-	// ethAPI          *ethapi.PublicBlockChainAPI
+	// ethAPI          *ethapi.PublicBlockChainAPI //todo migrate
 	validatorSetABI abi.ABI
 	slashABI        abi.ABI
 
@@ -231,7 +237,7 @@ type Parlia struct {
 func New(
 	chainConfig *params.ChainConfig,
 	snapshotConfig *params.SnapshotConfig,
-	cliqueDB kv.RwDB,
+	db kv.RwDB,
 ) *Parlia {
 	// get parlia config
 	parliaConfig := chainConfig.Parlia
@@ -258,17 +264,19 @@ func New(
 	if err != nil {
 		panic(err)
 	}
+	var signer types.Signer
+	signer = *types.MakeSigner(chainConfig, 1)
 	c := &Parlia{
-		chainConfig:     chainConfig,
-		config:          parliaConfig,
-		genesisHash:     nil,
-		db:              db,
-		ethAPI:          nil,
+		chainConfig: chainConfig,
+		config:      parliaConfig,
+		genesisHash: common.Hash{}, //todo migrate
+		db:          db,
+		// ethAPI:          nil, //todo migrate
 		recentSnaps:     recentSnaps,
 		signatures:      signatures,
 		validatorSetABI: vABI,
 		slashABI:        sABI,
-		signer:          types.NewEIP155Signer(chainConfig.ChainID),
+		signer:          signer,
 	}
 
 	return c
@@ -276,14 +284,17 @@ func New(
 
 func (p *Parlia) IsSystemTransaction(tx *types.Transaction, header *types.Header) (bool, error) {
 	// deploy a contract
-	if tx.To() == nil {
+	if (*tx).GetTo() == nil {
 		return false, nil
 	}
-	sender, err := types.Sender(p.signer, tx)
+	// sender, err := types.Sender(p.signer, tx) //todo
+	sender, err := p.signer.Sender(*tx)
+
 	if err != nil {
 		return false, errors.New("UnAuthorized transaction")
 	}
-	if sender == header.Coinbase && isToSystemContract(*tx.To()) && tx.GasPrice().Cmp(big.NewInt(0)) == 0 {
+	// (*tx).GetPrice().Cmp(uint256.NewInt(0))
+	if sender == header.Coinbase && isToSystemContract(*(*tx).GetTo()) && (*tx).GetPrice().Cmp(uint256.NewInt(0)) == 0 {
 		return true, nil
 	}
 	return false, nil
@@ -657,7 +668,7 @@ func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs *[]*types.Transaction,
+func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.IntraBlockState, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// warn if not in majority fork
 	number := header.Number.Uint64()
@@ -727,7 +738,7 @@ func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Heade
 
 // FinalizeAndAssemble implements consensus.Engine, ensuring no uncles are set,
 // nor block rewards given, and returns the final block.
-func (p *Parlia) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
+func (p *Parlia) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.IntraBlockState,
 	txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, []*types.Receipt, error) {
 	// No block rewards in PoA, so the state remains as is and uncles are dropped
 	cx := chainContext{Chain: chain, parlia: p}
@@ -1010,7 +1021,7 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash) ([]common.Address, 
 }
 
 // slash spoiled validators
-func (p *Parlia) distributeIncoming(val common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (p *Parlia) distributeIncoming(val common.Address, state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	coinbase := header.Coinbase
 	balance := state.GetBalance(consensus.SystemAddress)
@@ -1038,7 +1049,7 @@ func (p *Parlia) distributeIncoming(val common.Address, state *state.StateDB, he
 }
 
 // slash spoiled validators
-func (p *Parlia) slash(spoiledVal common.Address, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (p *Parlia) slash(spoiledVal common.Address, state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "slash"
@@ -1058,7 +1069,7 @@ func (p *Parlia) slash(spoiledVal common.Address, state *state.StateDB, header *
 }
 
 // init contract
-func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (p *Parlia) initContract(state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "init"
@@ -1090,7 +1101,7 @@ func (p *Parlia) initContract(state *state.StateDB, header *types.Header, chain 
 	return nil
 }
 
-func (p *Parlia) distributeToSystem(amount *big.Int, state *state.StateDB, header *types.Header, chain core.ChainContext,
+func (p *Parlia) distributeToSystem(amount *big.Int, state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// get system message
 	msg := p.getSystemMessage(header.Coinbase, common.HexToAddress(systemcontracts.SystemRewardContract), nil, amount)
@@ -1100,7 +1111,7 @@ func (p *Parlia) distributeToSystem(amount *big.Int, state *state.StateDB, heade
 
 // slash spoiled validators
 func (p *Parlia) distributeToValidator(amount *big.Int, validator common.Address,
-	state *state.StateDB, header *types.Header, chain core.ChainContext,
+	state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool) error {
 	// method
 	method := "deposit"
@@ -1135,9 +1146,9 @@ func (p *Parlia) getSystemMessage(from, toAddress common.Address, data []byte, v
 
 func (p *Parlia) applyTransaction(
 	msg callmsg,
-	state *state.StateDB,
+	state *state.IntraBlockState,
 	header *types.Header,
-	chainContext core.ChainContext,
+	chainContext chainContext,
 	txs *[]*types.Transaction, receipts *[]*types.Receipt,
 	receivedTxs *[]*types.Transaction, usedGas *uint64, mining bool,
 ) (err error) {
@@ -1285,13 +1296,13 @@ func (m callmsg) Data() []byte         { return m.CallMsg.Data }
 // apply message
 func applyMessage(
 	msg callmsg,
-	state *state.StateDB,
+	state *state.IntraBlockState,
 	header *types.Header,
 	chainConfig *params.ChainConfig,
-	chainContext core.ChainContext,
+	chainContext chainContext,
 ) (uint64, error) {
 	// Create a new context to be used in the EVM environment
-	context := core.NewEVMBlockContext(header, chainContext, nil)
+	context := core.NewEVMBlockContext(header, c.Chain.GetHeader, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
 	vmenv := vm.NewEVM(context, vm.TxContext{Origin: msg.From(), GasPrice: big.NewInt(0)}, state, chainConfig, vm.Config{})

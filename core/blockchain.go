@@ -119,12 +119,25 @@ func ExecuteBlockEphemerally(
 	}
 	noop := state.NewNoopWriter()
 	//fmt.Printf("====txs processing start: %d====\n", block.NumberU64())
+
+	posa, isPoSA := engine.(consensus.PoSA)
+	systemTxs := make([]types.Transaction, 0, 2)
+	commonTxs := make([]types.Transaction, 0, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		ibs.Prepare(tx.Hash(), block.Hash(), i)
 		writeTrace := false
 		if vmConfig.Debug && vmConfig.Tracer == nil {
 			vmConfig.Tracer = vm.NewStructLogger(&vm.LogConfig{})
 			writeTrace = true
+		}
+
+		if isPoSA {
+			if isSystemTx, err := posa.IsSystemTransaction(&tx, block.Header()); err != nil {
+				return nil, err
+			} else if isSystemTx {
+				systemTxs = append(systemTxs, tx)
+				continue
+			}
 		}
 
 		receipt, _, err := ApplyTransaction(chainConfig, getHeader, engine, nil, gp, ibs, noop, header, tx, usedGas, *vmConfig, contractHasTEVM)
@@ -146,6 +159,7 @@ func ExecuteBlockEphemerally(
 		if err != nil {
 			return nil, fmt.Errorf("could not apply tx %d from block %d [%v]: %w", i, block.NumberU64(), tx.Hash().Hex(), err)
 		}
+		commonTxs = append(commonTxs, tx)
 		if !vmConfig.NoReceipts {
 			receipts = append(receipts, receipt)
 		}
@@ -168,7 +182,7 @@ func ExecuteBlockEphemerally(
 		}
 	}
 	if !vmConfig.ReadOnly {
-		if err := FinalizeBlockExecution(engine, stateReader, block.Header(), block.Transactions(), block.Uncles(), stateWriter, chainConfig, ibs, receipts, epochReader, chainReader); err != nil {
+		if err := FinalizeBlockExecution(engine, stateReader, block.Header(), systemTxs, commonTxs, block.Uncles(), stateWriter, chainConfig, ibs, receipts, epochReader, chainReader); err != nil { //todo
 			return nil, err
 		}
 	}
@@ -238,11 +252,11 @@ func CallContractTx(contract common.Address, data []byte, ibs *state.IntraBlockS
 	return tx.FakeSign(from)
 }
 
-func FinalizeBlockExecution(engine consensus.Engine, stateReader state.StateReader, header *types.Header, txs types.Transactions, uncles []*types.Header, stateWriter state.WriterWithChangeSets, cc *params.ChainConfig, ibs *state.IntraBlockState, receipts types.Receipts, e consensus.EpochReader, headerReader consensus.ChainHeaderReader) error {
+func FinalizeBlockExecution(engine consensus.Engine, stateReader state.StateReader, header *types.Header, systxs types.Transactions, txs types.Transactions, uncles []*types.Header, stateWriter state.WriterWithChangeSets, cc *params.ChainConfig, ibs *state.IntraBlockState, receipts types.Receipts, e consensus.EpochReader, headerReader consensus.ChainHeaderReader) error {
 	//ibs.Print(cc.Rules(header.Number.Uint64()))
 	//fmt.Printf("====tx processing end====\n")
 
-	if err := engine.Finalize(cc, header, ibs, txs, uncles, receipts, e, headerReader, func(contract common.Address, data []byte) ([]byte, error) {
+	if err := engine.Finalize(cc, header, ibs, systxs, txs, uncles, receipts, e, headerReader, func(contract common.Address, data []byte) ([]byte, error) {
 		return SysCallContract(contract, data, *cc, ibs, header, engine)
 	}); err != nil {
 		return err

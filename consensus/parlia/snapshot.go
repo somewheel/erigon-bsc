@@ -18,6 +18,7 @@ package parlia
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -25,18 +26,23 @@ import (
 	"sort"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/consensus"
 	"github.com/ledgerwatch/erigon/core/types"
-	"github.com/ledgerwatch/erigon/ethdb"
-	"github.com/ledgerwatch/erigon/internal/ethapi"
 	"github.com/ledgerwatch/erigon/params"
+)
+
+const (
+	ParliaSeparate     = "ParliaSeparate"
+	ParliaSnapshot     = "ParliaSnapshot"
+	ParliaLastSnapshot = "ParliaLastSnapshot"
 )
 
 // Snapshot is the state of the validatorSet at a given point.
 type Snapshot struct {
-	config   *params.ParliaConfig // Consensus engine parameters to fine tune behavior
-	ethAPI   *ethapi.PublicBlockChainAPI
+	config *params.ParliaConfig // Consensus engine parameters to fine tune behavior
+	// ethAPI   *ethapi.PublicBlockChainAPI //todo
 	sigCache *lru.ARCCache // Cache of recent block signatures to speed up ecrecover
 
 	Number           uint64                      `json:"number"`             // Block number where the snapshot was created
@@ -55,11 +61,11 @@ func newSnapshot(
 	number uint64,
 	hash common.Hash,
 	validators []common.Address,
-	ethAPI *ethapi.PublicBlockChainAPI,
+	// ethAPI *ethapi.PublicBlockChainAPI, //todo
 ) *Snapshot {
 	snap := &Snapshot{
-		config:           config,
-		ethAPI:           ethAPI,
+		config: config,
+		// ethAPI:           ethAPI, //todo
 		sigCache:         sigCache,
 		Number:           number,
 		Hash:             hash,
@@ -81,8 +87,17 @@ func (s validatorsAscending) Less(i, j int) bool { return bytes.Compare(s[i][:],
 func (s validatorsAscending) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // loadSnapshot loads an existing snapshot from the database.
-func loadSnapshot(config *params.ParliaConfig, sigCache *lru.ARCCache, db ethdb.Database, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) {
-	blob, err := db.Get(append([]byte("parlia-"), hash[:]...))
+// func loadSnapshot(config *params.ParliaConfig, sigCache *lru.ARCCache, db kv.RwDB, hash common.Hash, ethAPI *ethapi.PublicBlockChainAPI) (*Snapshot, error) { //todo
+
+func loadSnapshot(config *params.ParliaConfig, sigCache *lru.ARCCache, db kv.RwDB, num uint64, hash common.Hash) (*Snapshot, error) {
+
+	tx, err := db.BeginRo(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	blob, err := tx.GetOne(ParliaSeparate, SnapshotFullKey(num, hash))
+	// blob, err := db.Get(append([]byte("parlia-"), hash[:]...)) //todo
 	if err != nil {
 		return nil, err
 	}
@@ -92,25 +107,28 @@ func loadSnapshot(config *params.ParliaConfig, sigCache *lru.ARCCache, db ethdb.
 	}
 	snap.config = config
 	snap.sigCache = sigCache
-	snap.ethAPI = ethAPI
+	// snap.ethAPI = ethAPI //todo
 
 	return snap, nil
 }
 
 // store inserts the snapshot into the database.
-func (s *Snapshot) store(db ethdb.Database) error {
+func (s *Snapshot) store(db kv.RwDB) error {
 	blob, err := json.Marshal(s)
 	if err != nil {
 		return err
 	}
-	return db.Put(append([]byte("parlia-"), s.Hash[:]...), blob)
+	// return db.Put(append([]byte("parlia-"), s.Hash[:]...), blob) //todo
+	return db.Update(context.Background(), func(tx kv.RwTx) error {
+		return tx.Put(ParliaSeparate, SnapshotFullKey(s.Number, s.Hash), blob)
+	})
 }
 
 // copy creates a deep copy of the snapshot
 func (s *Snapshot) copy() *Snapshot {
 	cpy := &Snapshot{
-		config:           s.config,
-		ethAPI:           s.ethAPI,
+		config: s.config,
+		// ethAPI:           s.ethAPI, //todo
 		sigCache:         s.sigCache,
 		Number:           s.Number,
 		Hash:             s.Hash,

@@ -468,7 +468,7 @@ func (p *Parlia) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 
 		// If an on-disk checkpoint snapshot can be found, use that
 		if number%checkpointInterval == 0 {
-			if s, err := loadSnapshot(p.config, p.signatures, p.db, hash, p.ethAPI); err == nil {
+			if s, err := loadSnapshot(p.config, p.signatures, p.db, number, hash); err == nil { //todo
 				log.Trace("Loaded snapshot from disk", "number", number, "hash", hash)
 				snap = s
 				break
@@ -490,7 +490,7 @@ func (p *Parlia) snapshot(chain consensus.ChainHeaderReader, number uint64, hash
 				}
 
 				// new snap shot
-				snap = newSnapshot(p.config, p.signatures, number, hash, validators, p.ethAPI)
+				snap = newSnapshot(p.config, p.signatures, number, hash, validators) //todo
 				if err := snap.store(p.db); err != nil {
 					return nil, err
 				}
@@ -665,10 +665,14 @@ func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	}
 	return nil
 }
+func (p *Parlia) Finalize(config *params.ChainConfig, header *types.Header, state *state.IntraBlockState, txs []types.Transaction, uncles []*types.Header, r types.Receipts, e consensus.EpochReader, chain consensus.ChainHeaderReader, syscall consensus.SystemCall) error {
+
+	return p.Finalize1(chain, header, state, txs, uncles, r, s)
+}
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (p *Parlia) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.IntraBlockState, txs *[]*types.Transaction,
+func (p *Parlia) Finalize1(chain consensus.ChainHeaderReader, header *types.Header, state *state.IntraBlockState, txs *[]*types.Transaction,
 	uncles []*types.Header, receipts *[]*types.Receipt, systemTxs *[]*types.Transaction, usedGas *uint64) error {
 	// warn if not in majority fork
 	number := header.Number.Uint64()
@@ -935,8 +939,15 @@ func (p *Parlia) SignRecently(chain consensus.ChainReader, parent *types.Header)
 // CalcDifficulty is the difficulty adjustment algorithm. It returns the difficulty
 // that a new block should have based on the previous blocks in the chain and the
 // current signer.
-func (p *Parlia) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
-	snap, err := p.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+// func (p *Parlia) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
+// 	snap, err := p.snapshot(chain, parent.Number.Uint64(), parent.Hash(), nil)
+// 	if err != nil {
+// 		return nil
+// 	}
+// 	return CalcDifficulty(snap, p.val)
+// } //todo
+func (p *Parlia) CalcDifficulty(chain consensus.ChainHeaderReader, time, parentTime uint64, parentDifficulty *big.Int, parentNumber uint64, parentHash, parentUncleHash common.Hash, parentSeal []rlp.RawValue) *big.Int {
+	snap, err := p.snapshot(chain, parentNumber, parentHash, nil)
 	if err != nil {
 		return nil
 	}

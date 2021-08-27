@@ -212,6 +212,9 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 	} else if chainConfig.Aura != nil {
 		config.Aura.Etherbase = config.Miner.Etherbase
 		consensusConfig = &config.Aura
+	} else if chainConfig.Parlia != nil {
+		// config.Aura.Etherbase = config.Miner.Etherbase
+		consensusConfig = &config.Parity
 	} else {
 		consensusConfig = &config.Ethash
 	}

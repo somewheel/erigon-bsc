@@ -96,7 +96,7 @@ func loadSnapshot(config *params.ParliaConfig, sigCache *lru.ARCCache, db kv.RwD
 		return nil, err
 	}
 	defer tx.Rollback()
-	blob, err := tx.GetOne(ParliaSeparate, SnapshotFullKey(num, hash))
+	blob, err := tx.GetOne(kv.CliqueSeparate, SnapshotFullKey(num, hash))
 	// blob, err := db.Get(append([]byte("parlia-"), hash[:]...)) //todo
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func (s *Snapshot) store(db kv.RwDB) error {
 	}
 	// return db.Put(append([]byte("parlia-"), s.Hash[:]...), blob) //todo
 	return db.Update(context.Background(), func(tx kv.RwTx) error {
-		return tx.Put(ParliaSeparate, SnapshotFullKey(s.Number, s.Hash), blob)
+		return tx.Put(kv.CliqueSeparate, SnapshotFullKey(s.Number, s.Hash), blob)
 	})
 }
 

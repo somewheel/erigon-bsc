@@ -1216,7 +1216,7 @@ func (p *Parlia) applyTransaction(
 ) (err error) {
 	nonce := state.GetNonce(msg.From())
 	expectedTx := types.NewTransaction(nonce, *msg.To(), msg.Value(), msg.Gas(), msg.GasPrice(), msg.Data())
-	expectedHash := expectedTx.Hash()
+	// expectedHash := expectedTx.Hash()
 
 	if msg.From() == p.val && mining {
 		tx, err := p.signTxFn(msg.From(), expectedTx, p.chainConfig.ChainID)
@@ -1229,16 +1229,16 @@ func (p *Parlia) applyTransaction(
 			return errors.New("supposed to get a actual transaction, but get none")
 		}
 		actualTx := (*receivedTxs)[0]
-		if !bytes.Equal(actualTx.Hash().Bytes(), expectedHash.Bytes()) {
-			return fmt.Errorf("expected tx hash %v, get %v, nonce %d, to %s, value %s, gas %d, gasPrice %s, data %s", expectedHash.String(), actualTx.Hash().String(),
-				expectedTx.GetNonce(),
-				expectedTx.GetTo().String(),
-				expectedTx.GetValue().String(),
-				expectedTx.GetGas(),
-				expectedTx.GetPrice().String(),
-				hex.EncodeToString(expectedTx.Data),
-			)
-		}
+		// if !bytes.Equal(actualTx.Hash().Bytes(), expectedHash.Bytes()) {
+		// 	return fmt.Errorf("expected tx hash %v, get %v, nonce %d, to %s, value %s, gas %d, gasPrice %s, data %s", expectedHash.String(), actualTx.Hash().String(),
+		// 		expectedTx.GetNonce(),
+		// 		expectedTx.GetTo().String(),
+		// 		expectedTx.GetValue().String(),
+		// 		expectedTx.GetGas(),
+		// 		expectedTx.GetPrice().String(),
+		// 		hex.EncodeToString(expectedTx.Data),
+		// 	)
+		// }//todo highest
 		expectedTx = actualTx.(*types.LegacyTx)
 		// move to next
 		*receivedTxs = (*receivedTxs)[1:]
@@ -1364,8 +1364,9 @@ func applyMessage(
 	chainConfig *params.ChainConfig,
 	chainContext chainContext,
 ) (uint64, error) {
+
 	// Create a new context to be used in the EVM environment
-	context := core.NewEVMBlockContext(header, chainContext.GetHeader, nil, nil, nil)
+	context := core.NewEVMBlockContext(header, chainContext.GetHeader, chainContext.Engine(), nil, nil)
 	// NewEVMBlockContext(header, nil, engine, &state.SystemAddress, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.

@@ -1053,6 +1053,17 @@ func setClique(ctx *cli.Context, cfg *params.SnapshotConfig, datadir string) {
 	}
 }
 
+func setParlia(ctx *cli.Context, cfg *params.SnapshotConfig, datadir string) {
+	cfg.CheckpointInterval = ctx.GlobalUint64(CliqueSnapshotCheckpointIntervalFlag.Name)
+	cfg.InmemorySnapshots = ctx.GlobalInt(CliqueSnapshotInmemorySnapshotsFlag.Name)
+	cfg.InmemorySignatures = ctx.GlobalInt(CliqueSnapshotInmemorySignaturesFlag.Name)
+	if ctx.GlobalIsSet(CliqueDataDirFlag.Name) {
+		cfg.DBPath = path.Join(ctx.GlobalString(CliqueDataDirFlag.Name), "parlia/db")
+	} else {
+		cfg.DBPath = path.Join(datadir, "parlia/db")
+	}
+}
+
 func setAuRa(ctx *cli.Context, cfg *params.AuRaConfig, datadir string) {
 	cfg.DBPath = path.Join(datadir, "aura")
 }
@@ -1159,6 +1170,7 @@ func SetEthConfig(ctx *cli.Context, nodeConfig *node.Config, cfg *ethconfig.Conf
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, nodeConfig.DataDir, cfg)
 	setClique(ctx, &cfg.Clique, nodeConfig.DataDir)
+	setParlia(ctx, &cfg.Parity, nodeConfig.DataDir)
 	setAuRa(ctx, &cfg.Aura, nodeConfig.DataDir)
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
@@ -1254,7 +1266,7 @@ func SetEthConfig(ctx *cli.Context, nodeConfig *node.Config, cfg *ethconfig.Conf
 		}
 	case params.ParliaChainName:
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkID = 97
+			cfg.NetworkID = 1
 		}
 		cfg.Genesis = core.DefaultParliaGenesisBlock()
 	default:

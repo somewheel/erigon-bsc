@@ -164,23 +164,24 @@ func ExecuteBlockEphemerally(
 			receipts = append(receipts, receipt)
 		}
 	}
+	//*****************************//todo highest******************************/
+	// if chainConfig.IsByzantium(header.Number.Uint64()) && !vmConfig.NoReceipts {
+	// 	receiptSha := types.DeriveSha(receipts)
+	// 	if receiptSha != block.Header().ReceiptHash {
+	// 		return nil, fmt.Errorf("mismatched receipt headers for block %d", block.NumberU64())
+	// 	}
+	// }
 
-	if chainConfig.IsByzantium(header.Number.Uint64()) && !vmConfig.NoReceipts {
-		receiptSha := types.DeriveSha(receipts)
-		if receiptSha != block.Header().ReceiptHash {
-			return nil, fmt.Errorf("mismatched receipt headers for block %d", block.NumberU64())
-		}
-	}
-
-	if *usedGas != header.GasUsed {
-		return nil, fmt.Errorf("gas used by execution: %d, in header: %d", *usedGas, header.GasUsed)
-	}
-	if !vmConfig.NoReceipts {
-		bloom := types.CreateBloom(receipts)
-		if bloom != header.Bloom {
-			return nil, fmt.Errorf("bloom computed by execution: %x, in header: %x", bloom, header.Bloom)
-		}
-	}
+	// if *usedGas != header.GasUsed {
+	// 	return nil, fmt.Errorf("gas used by execution: %d, in header: %d", *usedGas, header.GasUsed)
+	// }
+	// if !vmConfig.NoReceipts {
+	// 	bloom := types.CreateBloom(receipts)
+	// 	if bloom != header.Bloom {
+	// 		return nil, fmt.Errorf("bloom computed by execution: %x, in header: %x", bloom, header.Bloom)
+	// 	}
+	// }
+	//*****************************//todo highest******************************/
 	if !vmConfig.ReadOnly {
 		if err := FinalizeBlockExecution(engine, stateReader, block.Header(), systemTxs, commonTxs, block.Uncles(), stateWriter, chainConfig, ibs, receipts, epochReader, chainReader); err != nil { //todo
 			return nil, err

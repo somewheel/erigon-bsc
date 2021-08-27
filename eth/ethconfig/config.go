@@ -160,6 +160,7 @@ type Config struct {
 	Ethash ethash.Config
 
 	Clique params.SnapshotConfig
+	Parity params.SnapshotConfig
 	Aura   params.AuRaConfig
 
 	// Transaction pool options

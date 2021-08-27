@@ -285,6 +285,11 @@ func (sdb *IntraBlockState) TxIndex() int {
 	return sdb.txIndex
 }
 
+// BlockHash returns the current transaction black hash
+func (sdb *IntraBlockState) BlockHash() common.Hash {
+	return sdb.bhash
+}
+
 // DESCRIBED: docs/programmers_guide/guide.md#address---identifier-of-an-account
 func (sdb *IntraBlockState) GetCode(addr common.Address) []byte {
 	if sdb.tracer != nil {

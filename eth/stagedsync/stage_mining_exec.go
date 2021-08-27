@@ -106,7 +106,7 @@ func SpawnMiningExecStage(s *StageState, tx kv.RwTx, cfg MiningExecCfg, quit <-c
 		}
 	}
 
-	if err := core.FinalizeBlockExecution(cfg.engine, stateReader, current.Header, current.Txs, current.Uncles, stateWriter, &cfg.chainConfig, ibs, nil, nil, nil); err != nil {
+	if err := core.FinalizeBlockExecution(cfg.engine, stateReader, current.Header, nil, current.Txs, current.Uncles, stateWriter, &cfg.chainConfig, ibs, nil, nil, nil); err != nil {
 		return err
 	}
 

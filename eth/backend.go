@@ -219,7 +219,7 @@ func New(stack *node.Node, config *ethconfig.Config, logger log.Logger) (*Ethere
 		consensusConfig = &config.Ethash
 	}
 
-	backend.engine = ethconfig.CreateConsensusEngine(chainConfig, logger, consensusConfig, config.Miner.Notify, config.Miner.Noverify)
+	backend.engine = ethconfig.CreateConsensusEngine(chainKv, chainConfig, logger, consensusConfig, config.Miner.Notify, config.Miner.Noverify)
 
 	log.Info("Initialising Ethereum protocol", "network", config.NetworkID)
 

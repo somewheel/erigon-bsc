@@ -379,6 +379,9 @@ type epochReader struct {
 	tx kv.RwTx
 }
 
+func (cr epochReader) GetTx() kv.RwTx {
+	return cr.tx
+}
 func (cr epochReader) GetEpoch(hash common.Hash, number uint64) ([]byte, error) {
 	return rawdb.ReadEpoch(cr.tx, number, hash)
 }

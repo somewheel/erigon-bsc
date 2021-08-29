@@ -158,6 +158,9 @@ Loop:
 			if err = rawdb.WriteRawBody(tx, header.Hash(), blockHeight, rawBody); err != nil {
 				return fmt.Errorf("writing block body: %w", err)
 			}
+			//add WriteHeaderNumber in order to DoCall evm’s functions
+			rawdb.WriteHeaderNumber(tx, header.Hash(), blockHeight)
+			rawdb.ReadHeaderNumber(tx, header.Hash())
 			if blockHeight > bodyProgress {
 				bodyProgress = blockHeight
 				if err = stages.SaveStageProgress(tx, stages.Bodies, blockHeight); err != nil {

@@ -20,6 +20,7 @@ package consensus
 import (
 	"math/big"
 
+	"github.com/ledgerwatch/erigon-lib/kv"
 	"github.com/ledgerwatch/erigon/common"
 	"github.com/ledgerwatch/erigon/core/state"
 	"github.com/ledgerwatch/erigon/core/types"
@@ -64,6 +65,7 @@ type ChainReader interface {
 }
 
 type EpochReader interface {
+	GetTx() (kv.RwTx)
 	GetEpoch(blockHash common.Hash, blockN uint64) (transitionProof []byte, err error)
 	PutEpoch(blockHash common.Hash, blockN uint64, transitionProof []byte) (err error)
 	GetPendingEpoch(blockHash common.Hash, blockN uint64) (transitionProof []byte, err error)

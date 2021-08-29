@@ -23,6 +23,7 @@ import (
 
 	ethereum "github.com/ledgerwatch/erigon"
 	"github.com/ledgerwatch/erigon/core/types/accounts"
+	"github.com/ledgerwatch/erigon/ethdb"
 
 	// "github.com/ledgerwatch/erigon/accounts/abi"
 	// "github.com/ledgerwatch/erigon/common"
@@ -214,7 +215,7 @@ type Parlia struct {
 	config      *params.ParliaConfig // Consensus engine configuration parameters for parlia consensus
 	genesisHash common.Hash
 	db          kv.RwDB // Database to store and retrieve snapshot checkpoints
-
+	chainDb     kv.RwDB
 	recentSnaps *lru.ARCCache // Snapshots for recent block to speed up
 	signatures  *lru.ARCCache // Signatures of recent blocks to speed up mining
 
@@ -236,6 +237,7 @@ type Parlia struct {
 
 // New creates a Parlia consensus engine.
 func New(
+	chainDb kv.RwDB,
 	chainConfig *params.ChainConfig,
 	snapshotConfig *params.SnapshotConfig,
 	db kv.RwDB,
@@ -272,6 +274,7 @@ func New(
 		config:      parliaConfig,
 		genesisHash: common.Hash{}, //todo migrate
 		db:          db,
+		chainDb:     chainDb,
 		// ethAPI:          nil, //todo migrate
 		recentSnaps:     recentSnaps,
 		signatures:      signatures,
@@ -637,64 +640,64 @@ func (p *Parlia) verifySeal(chain consensus.ChainHeaderReader, header *types.Hea
 // Prepare implements consensus.Engine, preparing all the consensus fields of the
 // header for running the transactions on top.
 func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header) error {
-	header.Coinbase = p.val
-	header.Nonce = types.BlockNonce{}
+	// header.Coinbase = p.val
+	// header.Nonce = types.BlockNonce{}
 
-	number := header.Number.Uint64()
-	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
-	if err != nil {
-		return err
-	}
+	// number := header.Number.Uint64()
+	// snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// Set the correct difficulty
-	header.Difficulty = CalcDifficulty(snap, p.val)
+	// // Set the correct difficulty
+	// header.Difficulty = CalcDifficulty(snap, p.val)
 
-	// Ensure the extra data has all it's components
-	if len(header.Extra) < extraVanity-nextForkHashSize {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-nextForkHashSize-len(header.Extra))...)
-	}
-	header.Extra = header.Extra[:extraVanity-nextForkHashSize]
-	nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
-	header.Extra = append(header.Extra, nextForkHash[:]...)
+	// // Ensure the extra data has all it's components
+	// if len(header.Extra) < extraVanity-nextForkHashSize {
+	// 	header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-nextForkHashSize-len(header.Extra))...)
+	// }
+	// header.Extra = header.Extra[:extraVanity-nextForkHashSize]
+	// nextForkHash := forkid.NextForkHash(p.chainConfig, p.genesisHash, number)
+	// header.Extra = append(header.Extra, nextForkHash[:]...)
 
-	if number%p.config.Epoch == 0 {
-		newValidators, err := p.getCurrentValidators(header.ParentHash)
-		if err != nil {
-			return err
-		}
-		// sort validator by address
-		sort.Sort(validatorsAscending(newValidators))
-		for _, validator := range newValidators {
-			header.Extra = append(header.Extra, validator.Bytes()...)
-		}
-	}
+	// if number%p.config.Epoch == 0 {
+	// 	newValidators, err := p.getCurrentValidators(header.ParentHash)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	// sort validator by address
+	// 	sort.Sort(validatorsAscending(newValidators))
+	// 	for _, validator := range newValidators {
+	// 		header.Extra = append(header.Extra, validator.Bytes()...)
+	// 	}
+	// }
 
-	// add extra seal space
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
+	// // add extra seal space
+	// header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
-	// Mix digest is reserved for now, set to empty
-	header.MixDigest = common.Hash{}
+	// // Mix digest is reserved for now, set to empty
+	// header.MixDigest = common.Hash{}
 
-	// Ensure the timestamp has the correct delay
-	parent := chain.GetHeader(header.ParentHash, number-1)
-	if parent == nil {
-		return consensus.ErrUnknownAncestor
-	}
-	header.Time = p.blockTimeForRamanujanFork(snap, header, parent)
-	if header.Time < uint64(time.Now().Unix()) {
-		header.Time = uint64(time.Now().Unix())
-	}
+	// // Ensure the timestamp has the correct delay
+	// parent := chain.GetHeader(header.ParentHash, number-1)
+	// if parent == nil {
+	// 	return consensus.ErrUnknownAncestor
+	// }
+	// header.Time = p.blockTimeForRamanujanFork(snap, header, parent)
+	// if header.Time < uint64(time.Now().Unix()) {
+	// 	header.Time = uint64(time.Now().Unix())
+	// }
 	return nil
 }
 func (p *Parlia) Finalize(config *params.ChainConfig, header *types.Header, state *state.IntraBlockState, systemTxs []types.Transaction, txs []types.Transaction, uncles []*types.Header, r types.Receipts, e consensus.EpochReader, chain consensus.ChainHeaderReader, syscall consensus.SystemCall) error {
 
-	return p.FinalizeImpl(chain, header, state, txs, uncles, r, systemTxs, &header.GasUsed)
+	return p.FinalizeImpl(chain, header, state, txs, uncles, r, systemTxs, &header.GasUsed, e)
 }
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (p *Parlia) FinalizeImpl(chain consensus.ChainHeaderReader, header *types.Header, state *state.IntraBlockState, txs []types.Transaction,
-	uncles []*types.Header, receipts []*types.Receipt, systemTxs []types.Transaction, usedGas *uint64) error {
+	uncles []*types.Header, receipts []*types.Receipt, systemTxs []types.Transaction, usedGas *uint64, e consensus.EpochReader) error {
 	// warn if not in majority fork
 	number := header.Number.Uint64()
 	snap, err := p.snapshot(chain, number-1, header.ParentHash, nil)
@@ -708,7 +711,7 @@ func (p *Parlia) FinalizeImpl(chain consensus.ChainHeaderReader, header *types.H
 	// If the block is a epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
 	if header.Number.Uint64()%p.config.Epoch == 0 {
-		newValidators, err := p.getCurrentValidators(header.ParentHash)
+		newValidators, err := p.getCurrentValidators(header.ParentHash, e.GetTx())
 		if err != nil {
 			return err
 		}
@@ -1015,7 +1018,7 @@ func (p *Parlia) Close() error {
 // ==========================  interaction with contract/account =========
 
 // getCurrentValidators get current validators
-func (p *Parlia) getCurrentValidators(blockHash common.Hash) ([]common.Address, error) {
+func (p *Parlia) getCurrentValidators(blockHash common.Hash, tx kv.RwTx) ([]common.Address, error) {
 	// block
 	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
 
@@ -1025,11 +1028,11 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash) ([]common.Address, 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // cancel when we are finished consuming integers
 
-	dbtx, err := p.db.BeginRo(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer dbtx.Rollback()
+	// dbtx, err := p.chainDb.BeginRo(ctx)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// defer dbtx.Rollback()
 
 	data, err := p.validatorSetABI.Pack(method)
 	if err != nil {
@@ -1040,12 +1043,12 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash) ([]common.Address, 
 	msgData := (hexutil.Bytes)(data)
 	toAddress := common.HexToAddress(systemcontracts.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
-
+	contractHasTEVM := ethdb.GetHasTEVM(tx)
 	callResult, err := transactions.DoCall(ctx, ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,
-	}, dbtx, blockNr, nil, 0, p.chainConfig, nil, nil)
+	}, tx, blockNr, nil, 0, p.chainConfig, nil, contractHasTEVM)
 	if err != nil {
 		return nil, err
 	}

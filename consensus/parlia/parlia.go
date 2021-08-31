@@ -241,6 +241,7 @@ func New(
 	chainConfig *params.ChainConfig,
 	snapshotConfig *params.SnapshotConfig,
 	db kv.RwDB,
+	genesisHash common.Hash,
 ) *Parlia {
 	// get parlia config
 	parliaConfig := chainConfig.Parlia
@@ -272,7 +273,7 @@ func New(
 	c := &Parlia{
 		chainConfig: chainConfig,
 		config:      parliaConfig,
-		genesisHash: common.Hash{}, //todo migrate
+		genesisHash: genesisHash, //todo migrate
 		db:          db,
 		chainDb:     chainDb,
 		// ethAPI:          nil, //todo migrate
@@ -690,8 +691,8 @@ func (p *Parlia) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	return nil
 }
 func (p *Parlia) Finalize(config *params.ChainConfig, header *types.Header, state *state.IntraBlockState, systemTxs []types.Transaction, txs []types.Transaction, uncles []*types.Header, r types.Receipts, e consensus.EpochReader, chain consensus.ChainHeaderReader, syscall consensus.SystemCall) error {
-
-	return p.FinalizeImpl(chain, header, state, txs, uncles, r, systemTxs, &header.GasUsed, e)
+	gasUsed := new(uint64)
+	return p.FinalizeImpl(chain, header, state, txs, uncles, r, systemTxs, gasUsed, e)
 }
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
@@ -1369,7 +1370,7 @@ func applyMessage(
 ) (uint64, error) {
 
 	// Create a new context to be used in the EVM environment
-	context := core.NewEVMBlockContext(header, chainContext.GetHeader, chainContext.Engine(), nil, nil)
+	context := core.NewEVMBlockContext(header, nil, chainContext.Engine(), nil, nil)
 	// NewEVMBlockContext(header, nil, engine, &state.SystemAddress, nil)
 	// Create a new environment which holds all relevant information
 	// about the transaction and calling mechanisms.
@@ -1378,8 +1379,8 @@ func applyMessage(
 	// test = vm.AccountRef(*msg.To())
 	// Apply the transaction to the current state (included in the env)
 	ret, returnGas, err := vmenv.Call(
-		vm.AccountRef(*msg.To()),
-		msg.From(),
+		vm.AccountRef(msg.From()),
+		*msg.To(),
 		msg.Data(),
 		msg.Gas(),
 		msg.Value(),

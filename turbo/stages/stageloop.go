@@ -256,7 +256,7 @@ func NewStagedSync(
 			),
 			stagedsync.StageSnapshotStateCfg(db, cfg.Snapshot, tmpdir, client, snapshotMigrator),
 			stagedsync.StageHashStateCfg(db, tmpdir),
-			stagedsync.StageTrieCfg(db, true, true, tmpdir),
+			stagedsync.StageTrieCfg(db, false, true, tmpdir),
 			stagedsync.StageHistoryCfg(db, cfg.Prune, tmpdir),
 			stagedsync.StageLogIndexCfg(db, cfg.Prune, tmpdir),
 			stagedsync.StageCallTracesCfg(db, cfg.Prune, 0, tmpdir),

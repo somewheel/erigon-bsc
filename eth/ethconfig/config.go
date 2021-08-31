@@ -184,7 +184,7 @@ type Config struct {
 	SyncLoopThrottle time.Duration
 }
 
-func CreateConsensusEngine(chainKv kv.RwDB, chainConfig *params.ChainConfig, logger log.Logger, config interface{}, notify []string, noverify bool) consensus.Engine {
+func CreateConsensusEngine(chainKv kv.RwDB, chainConfig *params.ChainConfig, logger log.Logger, config interface{}, notify []string, noverify bool, genesisHash common.Hash) consensus.Engine {
 	var eng consensus.Engine
 
 	switch consensusCfg := config.(type) {
@@ -214,7 +214,7 @@ func CreateConsensusEngine(chainKv kv.RwDB, chainConfig *params.ChainConfig, log
 		if chainConfig.Clique != nil {
 			eng = clique.New(chainConfig, consensusCfg, db.OpenDatabase(consensusCfg.DBPath, logger, consensusCfg.InMemory))
 		} else if chainConfig.Parlia != nil {
-			eng = parlia.New(chainKv, chainConfig, consensusCfg, db.OpenDatabase(consensusCfg.DBPath, logger, consensusCfg.InMemory))
+			eng = parlia.New(chainKv, chainConfig, consensusCfg, db.OpenDatabase(consensusCfg.DBPath, logger, consensusCfg.InMemory), genesisHash)
 		}
 	case *params.AuRaConfig:
 		if chainConfig.Aura != nil {

@@ -343,7 +343,7 @@ var (
 		LondonBlock:         nil,
 		Ethash:              nil,
 		Clique:              nil,
-		Parlia:              new(ParliaConfig),
+		Parlia:              &ParliaConfig{Period: 3, Epoch: 200},
 	}
 
 	TestRules = TestChainConfig.Rules(0)

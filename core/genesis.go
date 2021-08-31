@@ -310,7 +310,7 @@ func (g *Genesis) configOrDefault(ghash common.Hash) *params.ChainConfig {
 	case ghash == params.SokolGenesisHash:
 		return params.SokolChainConfig
 	default:
-		return params.AllEthashProtocolChanges
+		return params.ParliaChainConfig
 	}
 }
 

@@ -712,7 +712,7 @@ func (p *Parlia) FinalizeImpl(chain consensus.ChainHeaderReader, header *types.H
 	// If the block is a epoch end block, verify the validator list
 	// The verification can only be done when the state is ready, it can't be done in VerifyHeader.
 	if header.Number.Uint64()%p.config.Epoch == 0 {
-		newValidators, err := p.getCurrentValidators(header.ParentHash, e.GetTx())
+		newValidators, err := p.getCurrentValidators(state, header.ParentHash, e.GetTx())
 		if err != nil {
 			return err
 		}
@@ -735,6 +735,7 @@ func (p *Parlia) FinalizeImpl(chain consensus.ChainHeaderReader, header *types.H
 		if err != nil {
 			log.Error("init contract failed")
 		}
+
 	}
 	if header.Difficulty.Cmp(diffInTurn) != 0 {
 		spoiledVal := snap.supposeValidator()
@@ -1019,7 +1020,7 @@ func (p *Parlia) Close() error {
 // ==========================  interaction with contract/account =========
 
 // getCurrentValidators get current validators
-func (p *Parlia) getCurrentValidators(blockHash common.Hash, tx kv.RwTx) ([]common.Address, error) {
+func (p *Parlia) getCurrentValidators(state *state.IntraBlockState, blockHash common.Hash, tx kv.RwTx) ([]common.Address, error) {
 	// block
 	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
 
@@ -1045,7 +1046,7 @@ func (p *Parlia) getCurrentValidators(blockHash common.Hash, tx kv.RwTx) ([]comm
 	toAddress := common.HexToAddress(systemcontracts.ValidatorContract)
 	gas := (hexutil.Uint64)(uint64(math.MaxUint64 / 2))
 	contractHasTEVM := ethdb.GetHasTEVM(tx)
-	callResult, err := transactions.DoCall(ctx, ethapi.CallArgs{
+	callResult, err := transactions.DoCall(state, ctx, ethapi.CallArgs{
 		Gas:  &gas,
 		To:   &toAddress,
 		Data: &msgData,

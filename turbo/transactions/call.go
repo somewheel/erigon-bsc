@@ -24,7 +24,7 @@ import (
 
 const callTimeout = 5 * time.Minute
 
-func DoCall(ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash rpc.BlockNumberOrHash, overrides *map[common.Address]ethapi.Account, gasCap uint64, chainConfig *params.ChainConfig, filters *filters.Filters, contractHasTEVM func(hash common.Hash) (bool, error)) (*core.ExecutionResult, error) {
+func DoCall(istate *state.IntraBlockState, ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash rpc.BlockNumberOrHash, overrides *map[common.Address]ethapi.Account, gasCap uint64, chainConfig *params.ChainConfig, filters *filters.Filters, contractHasTEVM func(hash common.Hash) (bool, error)) (*core.ExecutionResult, error) {
 	// todo: Pending state is only known by the miner
 	/*
 		if blockNrOrHash.BlockNumber != nil && *blockNrOrHash.BlockNumber == rpc.PendingBlockNumber {
@@ -37,13 +37,15 @@ func DoCall(ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash r
 	if err != nil {
 		return nil, err
 	}
-	var stateReader state.StateReader
-	if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber {
-		stateReader = state.NewPlainStateReader(tx)
-	} else {
-		stateReader = state.NewPlainState(tx, blockNumber)
+	if istate == nil {
+		var stateReader state.StateReader
+		if num, ok := blockNrOrHash.Number(); ok && num == rpc.LatestBlockNumber {
+			stateReader = state.NewPlainStateReader(tx)
+		} else {
+			stateReader = state.NewPlainState(tx, blockNumber)
+		}
+		istate = state.New(stateReader)
 	}
-	state := state.New(stateReader)
 
 	header := rawdb.ReadHeader(tx, hash, blockNumber)
 	if header == nil {
@@ -55,11 +57,11 @@ func DoCall(ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash r
 		for addr, account := range *overrides {
 			// Override account nonce.
 			if account.Nonce != nil {
-				state.SetNonce(addr, uint64(*account.Nonce))
+				istate.SetNonce(addr, uint64(*account.Nonce))
 			}
 			// Override account(contract) code.
 			if account.Code != nil {
-				state.SetCode(addr, *account.Code)
+				istate.SetCode(addr, *account.Code)
 			}
 			// Override account balance.
 			if account.Balance != nil {
@@ -67,20 +69,20 @@ func DoCall(ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash r
 				if overflow {
 					return nil, fmt.Errorf("account.Balance higher than 2^256-1")
 				}
-				state.SetBalance(addr, balance)
+				istate.SetBalance(addr, balance)
 			}
 			if account.State != nil && account.StateDiff != nil {
 				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
-				state.SetStorage(addr, *account.State)
+				istate.SetStorage(addr, *account.State)
 			}
 			// Apply state diff into specified accounts.
 			if account.StateDiff != nil {
 				for key, value := range *account.StateDiff {
 					key := key
-					state.SetState(addr, &key, value)
+					istate.SetState(addr, &key, value)
 				}
 			}
 		}
@@ -114,7 +116,7 @@ func DoCall(ctx context.Context, args ethapi.CallArgs, tx kv.Tx, blockNrOrHash r
 	}
 	blockCtx, txCtx := GetEvmContext(msg, header, blockNrOrHash.RequireCanonical, tx, contractHasTEVM)
 
-	evm := vm.NewEVM(blockCtx, txCtx, state, chainConfig, vm.Config{NoBaseFee: true})
+	evm := vm.NewEVM(blockCtx, txCtx, istate, chainConfig, vm.Config{NoBaseFee: true})
 
 	// Wait for the context to be done and cancel the evm. Even if the
 	// EVM has finished, cancelling may be done (repeatedly)

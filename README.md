@@ -1,4 +1,4 @@
-# 测试erigon-bsc同步bsc私链
+# 同步bsc私链测试
 
 ### 一、搭建bsc私链
 

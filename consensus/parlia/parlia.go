@@ -737,6 +737,9 @@ func (p *Parlia) FinalizeImpl(chain consensus.ChainHeaderReader, header *types.H
 		}
 
 	}
+	if header.Number.Uint64() == 831 {
+		log.Warn("test")
+	}
 	if header.Difficulty.Cmp(diffInTurn) != 0 {
 		spoiledVal := snap.supposeValidator()
 		signedRecently := false
@@ -1091,7 +1094,7 @@ func (p *Parlia) getCurrentValidators(state *state.IntraBlockState, blockHash co
 func (p *Parlia) distributeIncoming(val common.Address, state *state.IntraBlockState, header *types.Header, chain chainContext,
 	txs *[]types.Transaction, receipts *[]*types.Receipt, receivedTxs *[]types.Transaction, usedGas *uint64, mining bool) error {
 	coinbase := header.Coinbase
-	balance := state.GetBalance(consensus.SystemAddress)
+	balance := state.GetBalance(consensus.SystemAddress).Clone()
 	if balance.Cmp(common.UBig0) <= 0 {
 		return nil
 	}
